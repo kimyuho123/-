@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="utf-8" />
+    <title>일정도우미</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+
+<body>
+    <header>
+        <a href="./home.html">
+            <h1>학교도우미</h1>
+        </a>
+    </header>
+
+    <main>
+        <section id="loginSection" class="card">
+            <div id="loginArea">
+                <h2 style="margin:0 0 8px 0">로그인</h2>
+                <input id="usernameInput" placeholder="아이디 예: sdh250212@sdh.hs.kr 또는 admin@sdh.hs.kr" />
+                <input id="displayNameInput" placeholder="표시 이름 (선택, 일정/건의함 식별용)" />
+                <div style="display:flex;gap:8px;margin-top:6px;">
+                    <button id="loginBtn">로그인</button>
+                    <button id="guestBtn">임시 게스트(테스트)</button>
+                    <button id="importBtn">가져오기 (JSON)</button>
+                    <input type="file" id="importFile" accept=".json" style="display:none" />
+                </div>
+                <div id="loginNote" class="small">
+                    이메일 형식은 <code>sdh(23|24|25)(01~04)(01~22)@sdh.hs.kr</code>을 권장합니다.
+                </div>
+            </div>
+        </section>
+
+        <!-- SCHEDULE + TOOLS -->
+        <section id="appSection" class="card hidden" aria-hidden="true">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                <div>
+                    <strong id="whoLabel"></strong>
+                    <div class="small" id="emailLabel"></div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center">
+                    <button id="exportBtn">내보내기 (JSON)</button>
+                    <button id="resetBtn" class="danger">초기화</button>
+                    <button id="logoutBtn">로그아웃</button>
+                </div>
+            </div>
+
+            <div class="toolbar">
+                <button id="addRowBtn">행 추가</button>
+                <button id="addColBtn">열 추가</button>
+                <button id="delRowBtn">행 삭제</button>
+                <button id="delColBtn">열 삭제</button>
+                <button id="renameRowBtn">행 이름 변경</button>
+                <button id="renameColBtn">열 이름 변경</button>
+                <button id="clearCellBtn">선택 셀 비우기</button>
+                <button id="saveBtn" class="primary">저장(수동)</button>
+                <button id="openSuggestBtn">건의함 열기</button>
+            </div>
+
+            <div class="small" style="margin-bottom:8px">표에서 셀을 클릭하면 바로 편집할 수 있습니다. 변경 시 자동 저장(잠시 후)됩니다.</div>
+
+            <div style="overflow:auto" id="tableWrap" class="card">
+                <table id="scheduleTable" aria-label="일정표"></table>
+            </div>
+
+            <div style="margin-top:10px" class="small">
+                <strong>팁:</strong> 내보내기로 JSON 파일로 백업하면 다른 브라우저/기기에서 가져올 수 있어요.
+            </div>
+        </section>
+
+        <div id="suggestOverlay" class="overlay" aria-hidden="true">
+            <div class="modal" role="dialog" aria-modal="true" aria-labelledby="suggestTitle">
+                <h3 id="suggestTitle">건의함</h3>
+                <form id="suggestForm">
+                    <label>카테고리
+                        <select name="category" id="sCategory">
+                            <option value="general">일반</option>
+                            <option value="bug">버그</option>
+                            <option value="feature">기능제안</option>
+                        </select>
+                    </label>
+                    <label style="margin-top:8px">내용
+                        <textarea id="sContent" rows="4"
+                            style="width:100%;box-sizing:border-box;padding:8px;border:1px solid #ddd;border-radius:6px"></textarea>
+                    </label>
+                    <label style="display:flex;align-items:center;margin-top:8px">
+                        <input type="checkbox" id="sAnonymous" checked style="margin-right:8px" /> 익명 제출
+                    </label>
+                    <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end">
+                        <button type="button" id="sCancel">취소</button>
+                        <button type="submit" id="sSubmit" class="primary">제출</button>
+                    </div>
+                </form>
+                <hr />
+                <div style="max-height:180px;overflow:auto">
+                    <h4 style="margin:8px 0 6px 0">내가 제출한 건의</h4>
+                    <ul id="mySuggestions" style="padding-left:14px;margin:0 0 6px 0"></ul>
+                </div>
+            </div>
+        </div>
+
+        <footer class="small"></footer>
+    </main>
+
+    <script>
+        const KEY_SCHEDULE_PREFIX = 'schedule_';
+        const KEY_SUGGEST_PREFIX = 'suggests_';
+
+        function storageGet(key, fallback = null) {
+            try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
+            catch (e) { console.error('localStorage read error', e); return fallback; }
+        }
+        function storageSet(key, val) {
+            try { localStorage.setItem(key, JSON.stringify(val)); }
+            catch (e) { console.error('localStorage write error', e); alert('로컬 저장에 실패했습니다. 브라우저 권한을 확인하세요.'); }
+        }
+        function escapeHTML(s) { return s == null ? '' : s.toString().replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])); }
+
+        let currentUser = null;
+        const loginSection = document.getElementById('loginSection');
+        const appSection = document.getElementById('appSection');
+        const usernameInput = document.getElementById('usernameInput');
+        const displayNameInput = document.getElementById('displayNameInput');
+        const loginBtn = document.getElementById('loginBtn');
+        const guestBtn = document.getElementById('guestBtn');
+        const importBtn = document.getElementById('importBtn');
+        const importFile = document.getElementById('importFile');
+
+        function isValidStudentEmail(email) {
+            const regex = /^sdh[0-9a-zA-Z._-]*@sdh\.hs\.kr$/;
+            return regex.test(email);
+        }
+
+        function showAppFor(user) {
+            currentUser = user;
+            loginSection.classList.add('hidden');
+            appSection.classList.remove('hidden');
+            appSection.setAttribute('aria-hidden', 'false');
+            document.getElementById('whoLabel').textContent = user.displayName ? user.displayName : '(이름 없음)';
+            document.getElementById('emailLabel').textContent = user.username;
+            renderTable(loadSchedule());
+            renderMySuggestions();
+        }
+
+        function showLogin() {
+            currentUser = null;
+            loginSection.classList.remove('hidden');
+            appSection.classList.add('hidden');
+            appSection.setAttribute('aria-hidden', 'true');
+        }
+
+        loginBtn.addEventListener('click', () => {
+            const username = (usernameInput.value || '').trim();
+            const displayName = (displayNameInput.value || '').trim();
+
+            if (!username) {
+                alert('아이디를 입력하세요.');
+                return;
+            }
+
+            // ⛔ sdh~@sdh.hs.kr 형식이 아니면 로그인 불가
+            if (!isValidStudentEmail(username)) {
+                alert('이메일 형식이 올바르지 않습니다.\nsdh로 시작하고 @sdh.hs.kr로 끝나는 이메일만 로그인할 수 있습니다.');
+                return;
+            }
+
+            // 여기까지 통과하면 로그인 성공
+            showAppFor({ username, displayName });
+        });
+
+        guestBtn.addEventListener('click', () => {
+            const guest = 'guest_' + Math.random().toString(36).slice(2, 8) + '@local';
+            showAppFor({ username: guest, displayName: '임시 게스트' });
+        });
+
+        importBtn.addEventListener('click', () => importFile.click());
+        importFile.addEventListener('change', async (ev) => {
+            const f = ev.target.files[0]; if (!f) return;
+            try {
+                const txt = await f.text();
+                const obj = JSON.parse(txt);
+                const key = KEY_SCHEDULE_PREFIX + (currentUser ? currentUser.username : 'import');
+                storageSet(key, obj.schedule || {});
+                alert('가져오기 완료: 로컬 스토리지에 저장되었습니다. (사용자별 키에 저장됨)');
+            } catch (e) { alert('가져오기 실패: 파일이 JSON 형식인지 확인하세요.'); console.error(e); }
+        });
+
+        function defaultSchedule() {
+            return {
+                rows: ['월', '화', '수', '목', '금'],
+                cols: ['1교시', '2교시', '3교시', '4교시', '5교시', '6교시', '7교시'],
+                cells: {}
+            };
+        }
+
+        function scheduleKeyForUser(username) { return KEY_SCHEDULE_PREFIX + username; }
+        function suggestsKeyForUser(username) { return KEY_SUGGEST_PREFIX + username; }
+
+        function loadSchedule() {
+            if (!currentUser) return defaultSchedule();
+            const key = scheduleKeyForUser(currentUser.username);
+            const s = storageGet(key, null);
+            return s || defaultSchedule();
+        }
+        function saveSchedule(obj) {
+            if (!currentUser) return;
+            const key = scheduleKeyForUser(currentUser.username);
+            storageSet(key, obj);
+        }
+
+        const scheduleTable = document.getElementById('scheduleTable');
+        let selectedCell = null; // {r,c,element}
+
+        function renderTable(schedule) {
+            // build table head
+            scheduleTable.innerHTML = '';
+            const thead = document.createElement('thead');
+            const headRow = document.createElement('tr');
+            const corner = document.createElement('th'); corner.textContent = ''; headRow.appendChild(corner);
+            schedule.cols.forEach((c, ci) => {
+                const th = document.createElement('th');
+                th.textContent = c;
+                th.contentEditable = true;
+                th.dataset.c = ci;
+                th.addEventListener('blur', () => { schedule.cols[ci] = th.textContent || ('열' + (ci + 1)); saveSchedule(schedule); });
+                headRow.appendChild(th);
+            });
+            thead.appendChild(headRow);
+            scheduleTable.appendChild(thead);
+
+            // body
+            const tbody = document.createElement('tbody');
+            schedule.rows.forEach((r, ri) => {
+                const tr = document.createElement('tr');
+                const th = document.createElement('th');
+                th.textContent = r;
+                th.contentEditable = true;
+                th.dataset.r = ri;
+                th.addEventListener('blur', () => { schedule.rows[ri] = th.textContent || ('행' + (ri + 1)); saveSchedule(schedule); });
+                tr.appendChild(th);
+
+                schedule.cols.forEach((c, ci) => {
+                    const td = document.createElement('td');
+                    td.contentEditable = true;
+                    td.dataset.r = ri; td.dataset.c = ci;
+                    const key = ri + '_' + ci;
+                    td.innerHTML = escapeHTML(schedule.cells[key] || '');
+                    td.addEventListener('input', () => {
+                        schedule.cells[key] = td.innerText;
+                        debounceSave(schedule);
+                    });
+                    td.addEventListener('click', () => {
+                        // mark selection
+                        if (selectedCell) selectedCell.element.style.outline = '';
+                        selectedCell = { r: ri, c: ci, element: td };
+                        td.style.outline = '2px solid rgba(43,124,255,0.25)';
+                    });
+                    tr.appendChild(td);
+                });
+
+                tbody.appendChild(tr);
+            });
+
+            scheduleTable.appendChild(tbody);
+        }
+
+        /* debounce save to avoid too frequent writes */
+        let saveTimer = null;
+        function debounceSave(schedule) {
+            if (saveTimer) clearTimeout(saveTimer);
+            saveTimer = setTimeout(() => { saveSchedule(schedule); saveTimer = null; }, 700);
+        }
+
+        /* toolbar actions */
+        document.getElementById('addRowBtn').addEventListener('click', () => {
+            const s = loadSchedule();
+            s.rows.push('새 행');
+            // add empty cells for new row not necessary; cell entries created on edit
+            saveSchedule(s); renderTable(s);
+        });
+        document.getElementById('addColBtn').addEventListener('click', () => {
+            const s = loadSchedule();
+            s.cols.push('새 열');
+            saveSchedule(s); renderTable(s);
+        });
+        document.getElementById('delRowBtn').addEventListener('click', () => {
+            const s = loadSchedule();
+            if (s.rows.length === 0) return;
+            const idx = s.rows.length - 1;
+            if (!confirm('마지막 행을 삭제하시겠습니까?')) return;
+            s.rows.pop();
+            // remove cells for that row
+            Object.keys(s.cells).forEach(k => { if (k.startsWith(idx + '_')) delete s.cells[k]; });
+            // shift indices downwards
+            const newCells = {};
+            Object.keys(s.cells).forEach(k => {
+                const [r, c] = k.split('_').map(Number);
+                const nr = r > idx ? r - 1 : r;
+                newCells[nr + '_' + c] = s.cells[k];
+            });
+            s.cells = newCells;
+            saveSchedule(s); renderTable(s);
+        });
+        document.getElementById('delColBtn').addEventListener('click', () => {
+            const s = loadSchedule();
+            if (s.cols.length === 0) return;
+            const idx = s.cols.length - 1;
+            if (!confirm('마지막 열을 삭제하시겠습니까?')) return;
+            s.cols.pop();
+            Object.keys(s.cells).forEach(k => { if (k.split('_')[1] == idx) delete s.cells[k]; });
+            const newCells = {};
+            Object.keys(s.cells).forEach(k => {
+                const [r, c] = k.split('_').map(Number);
+                const nc = c > idx ? c - 1 : c;
+                newCells[r + '_' + nc] = s.cells[k];
+            });
+            s.cells = newCells;
+            saveSchedule(s); renderTable(s);
+        });
+        document.getElementById('renameRowBtn').addEventListener('click', () => {
+            const s = loadSchedule();
+            const idx = prompt('몇 번째 행(1~' + s.rows.length + ') 이름을 변경하시겠습니까?', '1');
+            if (!idx) return;
+            const i = parseInt(idx, 10) - 1;
+            if (isNaN(i) || i < 0 || i >= s.rows.length) { alert('유효한 번호를 입력하세요'); return; }
+            const name = prompt('새 행 이름을 입력하세요', s.rows[i]);
+            if (name == null) return;
+            s.rows[i] = name || s.rows[i];
+            saveSchedule(s); renderTable(s);
+        });
+        document.getElementById('renameColBtn').addEventListener('click', () => {
+            const s = loadSchedule();
+            const idx = prompt('몇 번째 열(1~' + s.cols.length + ') 이름을 변경하시겠습니까?', '1');
+            if (!idx) return;
+            const i = parseInt(idx, 10) - 1;
+            if (isNaN(i) || i < 0 || i >= s.cols.length) { alert('유효한 번호를 입력하세요'); return; }
+            const name = prompt('새 열 이름을 입력하세요', s.cols[i]);
+            if (name == null) return;
+            s.cols[i] = name || s.cols[i];
+            saveSchedule(s); renderTable(s);
+        });
+        document.getElementById('clearCellBtn').addEventListener('click', () => {
+            if (!selectedCell) { alert('먼저 셀을 선택하세요 (클릭)'); return; }
+            const s = loadSchedule();
+            const key = selectedCell.r + '_' + selectedCell.c;
+            delete s.cells[key];
+            saveSchedule(s); renderTable(s);
+        });
+        document.getElementById('saveBtn').addEventListener('click', () => {
+            saveSchedule(loadSchedule());
+            alert('저장되었습니다.');
+        });
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            if (!currentUser) return;
+            if (!confirm('현재 사용자 일정표를 초기화하시겠습니까?')) return;
+            const key = scheduleKeyForUser(currentUser.username);
+            localStorage.removeItem(key);
+            renderTable(loadSchedule());
+        });
+
+        /* export / import */
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            if (!currentUser) { alert('로그인이 필요합니다'); return; }
+            const schedule = loadSchedule();
+            const suggests = storageGet(suggestsKeyForUser(currentUser.username), []);
+            const obj = { schedule, suggests, username: currentUser.username, displayName: currentUser.displayName };
+            const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = `schedule_${currentUser.username}.json`; a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        /* logout */
+        document.getElementById('logoutBtn').addEventListener('click', () => { if (confirm('로그아웃하시겠습니까?')) showLogin(); });
+
+        /* ===========================
+           건의함(마편) 처리 (localStorage에 사용자별로 저장)
+           =========================== */
+        const suggestOverlay = document.getElementById('suggestOverlay');
+        const openSuggestBtn = document.getElementById('openSuggestBtn');
+        const sForm = document.getElementById('suggestForm');
+        const sCategory = document.getElementById('sCategory');
+        const sContent = document.getElementById('sContent');
+        const sAnonymous = document.getElementById('sAnonymous');
+        const sCancel = document.getElementById('sCancel');
+        const mySuggestionsEl = document.getElementById('mySuggestions');
+
+        openSuggestBtn.addEventListener('click', () => {
+            if (!currentUser) { alert('로그인이 필요합니다'); return; }
+            sContent.value = ''; sAnonymous.checked = true;
+            suggestOverlay.classList.add('visible'); suggestOverlay.setAttribute('aria-hidden', 'false');
+            renderMySuggestions();
+        });
+        sCancel.addEventListener('click', () => { suggestOverlay.classList.remove('visible'); suggestOverlay.setAttribute('aria-hidden', 'true'); });
+
+        sForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (!currentUser) { alert('로그인 필요'); return; }
+            const cat = sCategory.value;
+            const content = sContent.value.trim();
+            const anon = sAnonymous.checked;
+            if (!content) { alert('내용을 입력하세요'); return; }
+            const key = suggestsKeyForUser(currentUser.username);
+            const list = storageGet(key, []);
+            list.push({ category: cat, content: content, anonymous: anon, date: new Date().toISOString() });
+            storageSet(key, list);
+            sContent.value = ''; sAnonymous.checked = true;
+            renderMySuggestions();
+            alert('제출되었습니다. (본 브라우저에만 저장됩니다)');
+            suggestOverlay.classList.remove('visible'); suggestOverlay.setAttribute('aria-hidden', 'true');
+        });
+
+        function renderMySuggestions() {
+            if (!currentUser) { mySuggestionsEl.innerHTML = ''; return; }
+            const key = suggestsKeyForUser(currentUser.username);
+            const list = storageGet(key, []);
+            mySuggestionsEl.innerHTML = '';
+            if (!list || list.length === 0) { mySuggestionsEl.innerHTML = '<li class="small">제출된 건의가 없습니다.</li>'; return; }
+            list.slice().reverse().forEach(it => {
+                const li = document.createElement('li');
+                li.style.marginBottom = '8px';
+                li.innerHTML = `<div style="font-size:13px"><strong>${escapeHTML(it.category)}</strong> · <span class="small">${new Date(it.date).toLocaleString()}</span></div>
+                    <div style="margin-top:4px">${escapeHTML(it.anonymous ? '(익명) ' : '') + escapeHTML(it.content)}</div>`;
+                mySuggestionsEl.appendChild(li);
+            });
+        }
+
+        /* overlay close on background click / ESC */
+        suggestOverlay.addEventListener('click', (e) => { if (e.target === suggestOverlay) { suggestOverlay.classList.remove('visible'); suggestOverlay.setAttribute('aria-hidden', 'true'); } });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && suggestOverlay.classList.contains('visible')) { suggestOverlay.classList.remove('visible'); suggestOverlay.setAttribute('aria-hidden', 'true'); } });
+
+        /* ===========================
+           초기 로드: 토큰 형식은 없으므로 로그인 화면 먼저
+           =========================== */
+        showLogin();
+
+        /* ===========================
+           자동 저장 주의: 변경이 일어나면 저장되는지 테스트해보세요.
+           =========================== */
+
+    </script>
+</body>
+
+</html>

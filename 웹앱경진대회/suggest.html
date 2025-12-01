@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>학교도우미 - 건의함 사이트</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="./css/style.css">
+    <style>
+        .card {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 16px;
+        }
+        .small {
+            font-size: 12px;
+            color: #666;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 6px 8px;
+            font-size: 13px;
+            vertical-align: top;
+        }
+        th {
+            background: #f5f7ff;
+        }
+        .badge {
+            display: inline-block;
+            font-size: 11px;
+            padding: 1px 6px;
+            border-radius: 999px;
+            background: #eef3ff;
+            color: #2b57e8;
+        }
+        #loginBox {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+            margin-bottom: 10px;
+        }
+        #loginBox input {
+            flex: 1 1 180px;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+        #loginBox button {
+            padding: 6px 10px;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <a href="./home.html">
+        <h1>학교도우미</h1>
+    </a>
+</header>
+
+<main>
+    <section class="card">
+        <h2>📮 건의함 사이트</h2>
+        <p class="small">
+            일정도우미에서 제출된 건의를 모아서 보는 전용 페이지입니다.<br>
+            · 학생: 본인 아이디로 로그인하면 <strong>자기 건의만</strong> 확인<br>
+            · 관리자: <code>admin@sdh.hs.kr / admin1234</code>로 로그인하면 <strong>전체 건의</strong> 확인
+        </p>
+
+        <!-- 로그인 박스 -->
+        <div id="loginBox">
+            <input id="loginEmail" placeholder="아이디 (예: sdh25XXXXXX@sdh.hs.kr 또는 admin@sdh.hs.kr)">
+            <input id="loginPw" type="password" placeholder="관리자 비밀번호 (관리자일 경우만)">
+            <button id="loginBtn">건의 보기</button>
+        </div>
+        <div id="loginMsg" class="small">아이디를 입력한 뒤 [건의 보기]를 눌러 주세요.</div>
+
+        <h3 id="viewTitle" style="margin-top:14px;">현재: 미로그인 상태</h3>
+
+        <table aria-label="건의 목록">
+            <thead>
+            <tr>
+                <th style="width:22%">사용자</th>
+                <th style="width:12%">카테고리</th>
+                <th>내용</th>
+                <th style="width:20%">작성일</th>
+            </tr>
+            </thead>
+            <tbody id="suggestBody">
+            <tr><td colspan="4" style="text-align:center;">로그인 후 건의가 표시됩니다.</td></tr>
+            </tbody>
+        </table>
+    </section>
+</main>
+
+<script>
+    // 일정도우미와 동일한 prefix 사용
+    const KEY_SUGGEST_PREFIX = 'suggests_';
+
+    // 관리자 계정
+    const ADMIN_EMAIL = 'admin@sdh.hs.kr';
+    const ADMIN_PASSWORD = 'admin1234';
+
+    const loginEmail = document.getElementById('loginEmail');
+    const loginPw = document.getElementById('loginPw');
+    const loginBtn = document.getElementById('loginBtn');
+    const loginMsg = document.getElementById('loginMsg');
+    const viewTitle = document.getElementById('viewTitle');
+    const suggestBody = document.getElementById('suggestBody');
+
+    function escapeHTML(s) {
+        return s == null ? '' : s.toString().replace(/[&<>"']/g, m => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;',
+            '"': '&quot;', "'": '&#39;'
+        }[m]));
+    }
+
+    function loadUserSuggestions(email) {
+        const key = KEY_SUGGEST_PREFIX + email;
+        let list = [];
+        try {
+            list = JSON.parse(localStorage.getItem(key) || '[]');
+        } catch (e) {
+            console.error('parse error', e);
+        }
+
+        suggestBody.innerHTML = '';
+        if (!list || list.length === 0) {
+            suggestBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">등록된 건의가 없습니다.</td></tr>';
+            return;
+        }
+
+        list.slice().reverse().forEach(it => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><span class="badge">${escapeHTML(email)}</span></td>
+                <td>${escapeHTML(it.category)}</td>
+                <td>${escapeHTML(it.anonymous ? '(익명) ' : '') + escapeHTML(it.content)}</td>
+                <td>${new Date(it.date).toLocaleString()}</td>
+            `;
+            suggestBody.appendChild(tr);
+        });
+    }
+
+    function loadAllSuggestions() {
+        let all = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (!key || !key.startsWith(KEY_SUGGEST_PREFIX)) continue;
+            const user = key.substring(KEY_SUGGEST_PREFIX.length);
+            let list = [];
+            try {
+                list = JSON.parse(localStorage.getItem(key) || '[]');
+            } catch (e) {
+                console.error('parse error for', key, e);
+            }
+            list.forEach(it => {
+                all.push({
+                    user,
+                    category: it.category,
+                    content: it.content,
+                    anonymous: it.anonymous,
+                    date: it.date
+                });
+            });
+        }
+
+        all.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        suggestBody.innerHTML = '';
+        if (all.length === 0) {
+            suggestBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">등록된 건의가 없습니다.</td></tr>';
+            return;
+        }
+
+        all.forEach(it => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><span class="badge">${escapeHTML(it.user)}</span></td>
+                <td>${escapeHTML(it.category)}</td>
+                <td>${escapeHTML(it.anonymous ? '(익명) ' : '') + escapeHTML(it.content)}</td>
+                <td>${new Date(it.date).toLocaleString()}</td>
+            `;
+            suggestBody.appendChild(tr);
+        });
+    }
+
+    loginBtn.addEventListener('click', () => {
+        const email = (loginEmail.value || '').trim();
+        const pw = (loginPw.value || '').trim();
+
+        if (!email) {
+            alert('아이디를 입력하세요.');
+            return;
+        }
+
+        // 관리자 모드
+        if (email === ADMIN_EMAIL) {
+            if (!pw) {
+                alert('관리자 비밀번호를 입력하세요.');
+                return;
+            }
+            if (pw !== ADMIN_PASSWORD) {
+                alert('관리자 비밀번호가 올바르지 않습니다.');
+                return;
+            }
+            viewTitle.textContent = '현재: 관리자 모드 (전체 건의 보기)';
+            loginMsg.textContent = '관리자로 로그인했습니다. 이 브라우저의 전체 건의를 보는 중입니다.';
+            loadAllSuggestions();
+        } else {
+            // 일반 학생 모드: 해당 아이디의 건의만
+            viewTitle.textContent = `현재: ${email} 의 건의 목록`;
+            loginMsg.textContent = '해당 아이디로 저장된 건의만 조회합니다.';
+            loadUserSuggestions(email);
+        }
+    });
+</script>
+</body>
+</html>

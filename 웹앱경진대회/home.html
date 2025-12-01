@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="utf-8" />
+    <title>학교도우미(홈)</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="./css/style.css" />
+    <script src="./script/jquery-1.12.3.js"></script>
+    <script src="./script/script-home.js"></script>
+    <style>
+        /* 홈 전용 추가 스타일 (기존 style.css와 함께 사용) */
+        .home-hero {
+            margin-bottom: 16px;
+        }
+
+        .home-hero h2 {
+            margin: 0 0 6px 0;
+            font-size: 20px;
+            color: #111;
+        }
+
+        .home-hero p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .home-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .feature-card {
+            border: 1px solid #e6e9ef;
+            border-radius: 10px;
+            padding: 14px;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .feature-card h3 {
+            margin: 0 0 6px 0;
+            font-size: 16px;
+        }
+
+        .feature-card p {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: #eef3ff;
+            color: var(--accent);
+            font-size: 11px;
+            margin-bottom: 4px;
+        }
+
+        .btn-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #d7dbe6;
+            background: #fff;
+            font-size: 14px;
+            text-decoration: none;
+            color: #111;
+            cursor: pointer;
+        }
+
+        .btn-link.primary {
+            background: var(--accent);
+            color: #fff;
+            border: 0;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 6px;
+            flex-wrap: wrap;
+        }
+
+        .home-note {
+            margin-top: 14px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .imgslide {
+            width: 1070px;
+            overflow: hidden;
+        }
+
+        .slidelist {
+            width: 1070px;
+            height: 500px;
+            overflow: hidden;
+            border-radius: 12px;
+            position: relative;
+        }
+
+        .slidelist ul {
+            display: flex;
+            width: 3210px;
+            padding: 0;
+            margin: 0;
+        }
+
+        .slidelist li {
+            list-style: none;
+            width: 1070px;
+            height: 500px;
+        }
+
+        .slidelist a {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .slidelist img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #3a57e8;
+        }
+
+        .notice-card {
+            position: relative;
+            border-color: #e0e7ff;
+            /* 기존 카드보다 살짝 파란 느낌 */
+        }
+
+        /* 오른쪽 파란 줄 */
+        .notice-card::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 6px;
+            height: 100%;
+            /* 파란색 라인 */
+            border-radius: 0 10px 10px 0;
+            /* 카드 모서리랑 맞추기 */
+        }
+
+        /* 공지 텍스트: 기본은 일부만 보이게 */
+        .notice-content {
+            white-space: pre-line;
+            /* 줄바꿈 유지 */
+            max-height: 140px;
+            /* 접힌 상태에서 보이는 높이 */
+            overflow: hidden;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        /* 펼친 상태 */
+        .notice-card.expanded .notice-content {
+            max-height: 800px;
+            /* 충분히 크게 */
+        }
+
+        /* 버튼 살짝 작게 */
+        .notice-btn {
+            padding: 6px 14px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <a href="./home.html">
+            <h1>학교도우미</h1>
+        </a>
+        <div class="small">sdh · 시간표 & 건의함</div>
+    </header>
+
+    <main>
+        <section class="card">
+            <div class="home-hero">
+                <h2>학교도우미 홈</h2>
+                <p>시간표를 정리하고, 개선 아이디어를 건의함으로 보내는 웹 도구입니다.</p>
+            </div>
+
+            <div class="imgslide">
+                <div class="slidelist">
+                    <ul>
+                        <li>
+                            <a href="#">
+                                <img src="./images/1.png" alt="학교도우미 수업 시간표">
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#">
+                                <img src="./images/2.png" alt="학사 일정 관리 솔루션">
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#">
+                                <img src="./images/3.png" alt="학생 정보 관리">
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="home-grid">
+                <!-- 일정도우미 카드 -->
+                <div class="feature-card">
+                    <div>
+                        <div class="badge">핵심 기능</div>
+                        <h3>일정도우미 (시간표 편집)</h3>
+                        <p>
+                            요일·교시별로 내 시간표를 직접 편집하고 저장할 수 있어요.
+                            브라우저 로컬 저장소(localStorage)에 저장되기 때문에
+                            같은 기기에서는 자동으로 유지됩니다.
+                        </p>
+                    </div>
+                    <div class="btn-row">
+                        <!-- 여기 href는 네가 실제 사용하는 파일 이름에 맞게 수정 -->
+                        <a href="./insite.html" class="btn-link primary">
+                            일정도우미 열기
+                        </a>
+                    </div>
+                </div>
+
+                <!-- 건의함 안내 카드 -->
+                <div class="feature-card">
+                    <div>
+                        <div class="badge">건의함</div>
+                        <h3>건의함 안내</h3>
+                        <p>
+                            시간표 화면 오른쪽 상단의
+                            <strong>“건의함 열기”</strong> 버튼을 통해
+                            버그, 기능 제안, 기타 의견을 남길 수 있어요.
+                            제출 내용은 이 브라우저에만 저장됩니다.
+                        </p>
+                    </div>
+                    <div class="btn-row">
+                        <a href="./suggest.html" class="btn-link">
+                            건의함 사용하러 가기
+                        </a>
+                    </div>
+                </div>
+
+                <!-- 사용 팁 카드 -->
+                <div class="feature-card notice-card">
+                    <div>
+                        <div class="badge">공지사항</div>
+                        <h3>안내사항</h3>
+                        <p class="notice-preview">
+                            공지를 확인하려면 버튼을 눌러주세요.
+                        </p>
+                    </div>
+
+                    <div class="btn-row">
+                        <a href="./notice.html" class="btn-link notice-btn">
+                            공지사항 보기
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <footer class="small">
+            © 2025 학교도우미 · 일정도우미 (로컬 버전)
+        </footer>
+    </main>
+</body>
+
+</html>
